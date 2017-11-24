@@ -1,0 +1,3 @@
+* Download: go get github.com/mshaverdo/gowget
+* Test: go test github.com/mshaverdo/gowget
+* Run: ./bin/gowget [URL]...
