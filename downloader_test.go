@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -116,5 +119,66 @@ func TestGetUniqueFilename(t *testing.T) {
 		if got != v.want {
 			t.Errorf("getUniqueFilename(%q) == %q, want %q", v.in, got, v.want)
 		}
+	}
+}
+
+type mockWebGetter struct {
+	data        []byte
+	bytesCopied int
+}
+
+func NewMockWebGetter() *mockWebGetter {
+	data := make([]byte, 0, 1024*1024)
+	i := 0
+	for len(data) < cap(data) {
+		data = append(data, []byte(fmt.Sprintf("%7d\n", i))...)
+		i++
+	}
+
+	return &mockWebGetter{data: data}
+}
+
+func (g *mockWebGetter) Get(url string) (body io.ReadCloser, contentLen int, err error) {
+	g.bytesCopied = 0
+	return g, len(g.data), nil
+}
+
+func (g *mockWebGetter) Close() error {
+	return nil
+}
+
+func (g *mockWebGetter) Read(p []byte) (n int, err error) {
+	n = copy(p, g.data[g.bytesCopied:])
+	g.bytesCopied += n
+
+	if g.bytesCopied >= len(g.data) {
+		err = errors.New("EOF")
+	}
+
+	return
+}
+
+func TestDownloadUrl(t *testing.T) {
+	tmpdir, oldPwd, err := chdirTmp()
+	if err != nil {
+		t.Errorf("chdirTmp: %q", err.Error())
+	}
+
+	defer restoreWorkingDir(tmpdir, oldPwd)
+
+	d := NewDownloader()
+	getter := NewMockWebGetter()
+	d.webGetter = getter
+
+	isFinishedChannel := make(chan bool, 1)
+	go d.downloadUrl("http://example.com/test.out", isFinishedChannel)
+	<-isFinishedChannel
+
+	downloaded, err := ioutil.ReadFile("test.out")
+	if err != nil {
+		t.Errorf("Error while reading dowlnoaded file: %s", err.Error())
+	}
+	if !bytes.Equal(downloaded, getter.data) {
+		t.Errorf("Downloaded data != gauge")
 	}
 }

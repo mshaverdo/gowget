@@ -1,6 +1,5 @@
 package main
 
-//TODO: create tests
 import (
 	"fmt"
 	"io"
@@ -168,13 +167,13 @@ func (d *Downloader) downloadUrl(url string, finished chan bool) {
 	}
 	chunkLen := initialChunkSize
 	totalCopied := 0
-	lastCopied := 0
+	var lastCopied float64
 	measurementStart := time.Now()
 	for err = nil; err == nil; {
 		var n int64
 		n, err = io.CopyN(tmpfile, body, int64(chunkLen))
 		totalCopied += int(n)
-		lastCopied += int(n)
+		lastCopied += float64(n)
 
 		if contentLen > 0 {
 			d.addDownloadPercentage(url, (totalCopied*100)/contentLen)
@@ -183,9 +182,9 @@ func (d *Downloader) downloadUrl(url string, finished chan bool) {
 		// correct chunkLen according to downloading speed
 		if time.Now().Sub(measurementStart) > 1*time.Second {
 			// normalize last copied to 1 second
-			lastCopied /= int(time.Now().Sub(measurementStart) / (1 * time.Second))
+			lastCopiedPerSecond := int(lastCopied / time.Now().Sub(measurementStart).Seconds())
 			// update chunk len to copy chunksPerSecond chunks per second
-			chunkLen = lastCopied / chunksPerSecond
+			chunkLen = lastCopiedPerSecond / chunksPerSecond
 			lastCopied = 0
 			measurementStart = time.Now()
 		}
